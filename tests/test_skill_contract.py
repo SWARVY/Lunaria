@@ -17,6 +17,16 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Sol", description.group(1))
         self.assertIn("Luna Max", description.group(1))
 
+    def test_strict_topology_pins_an_identifiable_sol_primary(self) -> None:
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("primary model is exactly `gpt-5.6-sol`", text)
+        self.assertIn("If the primary model cannot be identified", text)
+
+    def test_luna_cannot_broaden_goals_or_decide_architecture(self) -> None:
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Luna must not broaden goals", text)
+        self.assertIn("Luna must not make architecture decisions", text)
+
     def test_skill_contains_required_delegation_and_result_slots(self) -> None:
         text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         for required in (

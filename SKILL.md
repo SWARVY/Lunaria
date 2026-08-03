@@ -11,8 +11,9 @@ Sol decides and integrates. Luna executes bounded task packets as a leaf worker.
 
 ## Preflight
 
-- Confirm the primary thread is Sol. If it is not Sol or cannot be identified,
-  report that strict Lunaria topology is inactive.
+- Confirm the primary model is exactly `gpt-5.6-sol`.
+  If the primary model cannot be identified or differs, report that strict
+  Lunaria topology is inactive.
 - Confirm the `luna_worker` custom role is available. Never silently substitute
   another model or role.
 - Treat the first `luna_worker` spawn as the model-entitlement check. If Luna or
@@ -27,6 +28,8 @@ inputs, a concrete deliverable, required validation, and escalation conditions
 are all present. Keep requirements, cross-cutting architecture, dependency
 ordering, shared configuration, external side-effect decisions, and final
 integration in Sol.
+
+Luna must not broaden goals. Luna must not make architecture decisions.
 
 Read-only packets may run in parallel. Parallel writes require exclusive paths
 and no shared lockfiles, generated artifacts, format output, migrations, or Git
