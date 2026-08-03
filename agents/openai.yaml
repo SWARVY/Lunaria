@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lunaria"
+  short_description: "Sol과 Luna Max의 안전한 작업 오케스트레이션"
+  default_prompt: "Use $lunaria to orchestrate this task with Sol and bounded Luna Max workers."
