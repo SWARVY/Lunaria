@@ -3,7 +3,10 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -67,3 +70,61 @@ class FileOperationTests(unittest.TestCase):
             self.assertEqual(backup, Path(f"{target}.bak-20260803T120000Z"))
             self.assertEqual(backup.read_text(encoding="utf-8"), "existing")
             self.assertEqual(target.read_text(encoding="utf-8"), VALID_AGENT)
+
+
+class EnvironmentTests(unittest.TestCase):
+    def test_multi_agent_feature_must_be_enabled(self) -> None:
+        enabled = manager.multi_agent_is_enabled(
+            "multi_agent  stable  true\nplugins stable true\n"
+        )
+        disabled = manager.multi_agent_is_enabled(
+            "multi_agent  stable  false\nplugins stable true\n"
+        )
+        self.assertTrue(enabled)
+        self.assertFalse(disabled)
+
+    def test_version_parser_accepts_current_cli_output(self) -> None:
+        self.assertEqual(
+            manager.parse_codex_version("codex-cli 0.144.1\n"),
+            "0.144.1",
+        )
+
+
+class CliTests(unittest.TestCase):
+    def test_check_returns_drift_for_missing_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            template = Path(directory) / "template.toml"
+            template.write_text(VALID_AGENT, encoding="utf-8")
+            target = Path(directory) / "missing.toml"
+            report = manager.EnvironmentReport("0.144.1", True, ())
+            with patch.object(manager, "run_environment_check", return_value=report):
+                code = manager.main([
+                    "check", "--template", str(template), "--target", str(target)
+                ])
+            self.assertEqual(code, manager.EXIT_DRIFT)
+
+    def test_plan_prints_diff_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            template = Path(directory) / "template.toml"
+            template.write_text(VALID_AGENT, encoding="utf-8")
+            target = Path(directory) / "missing.toml"
+            output = StringIO()
+            with redirect_stdout(output):
+                code = manager.main([
+                    "plan", "--template", str(template), "--target", str(target)
+                ])
+            self.assertEqual(code, manager.EXIT_OK)
+            self.assertFalse(target.exists())
+            self.assertIn("+++", output.getvalue())
+
+    def test_install_requires_replace_for_existing_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            template = Path(directory) / "template.toml"
+            target = Path(directory) / "luna-worker.toml"
+            template.write_text(VALID_AGENT, encoding="utf-8")
+            target.write_text("existing", encoding="utf-8")
+            code = manager.main([
+                "install", "--template", str(template), "--target", str(target)
+            ])
+            self.assertEqual(code, manager.EXIT_DRIFT)
+            self.assertEqual(target.read_text(encoding="utf-8"), "existing")
