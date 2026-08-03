@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -87,6 +88,27 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(
             manager.parse_codex_version("codex-cli 0.144.1\n"),
             "0.144.1",
+        )
+
+    def test_feature_command_os_error_returns_environment_report(self) -> None:
+        version_run = subprocess.CompletedProcess(
+            ["codex", "--version"],
+            0,
+            stdout="codex-cli 0.144.1\n",
+            stderr="",
+        )
+        with patch.object(
+            manager.subprocess,
+            "run",
+            side_effect=[version_run, OSError("feature command unavailable")],
+        ):
+            report = manager.run_environment_check()
+
+        self.assertEqual(report.version, "0.144.1")
+        self.assertFalse(report.multi_agent_enabled)
+        self.assertEqual(
+            report.errors,
+            ("Cannot run codex features list: feature command unavailable",),
         )
 
 

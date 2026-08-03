@@ -74,12 +74,16 @@ def run_environment_check(codex_bin: str = "codex") -> EnvironmentReport:
     if version_run.returncode != 0 or version is None:
         errors.append("Unable to identify the installed Codex CLI version")
 
-    feature_run = subprocess.run(
-        [codex_bin, "features", "list"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        feature_run = subprocess.run(
+            [codex_bin, "features", "list"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        errors.append(f"Cannot run {codex_bin} features list: {error}")
+        return EnvironmentReport(version, False, tuple(errors))
     enabled = feature_run.returncode == 0 and multi_agent_is_enabled(
         feature_run.stdout + feature_run.stderr
     )
