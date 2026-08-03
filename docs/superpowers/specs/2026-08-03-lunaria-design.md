@@ -1,36 +1,34 @@
-# Lunaria Skill Design
+# Lunaria 스킬 설계
 
-## Summary
+## 요약
 
-`lunaria` is a reusable Codex skill that keeps `gpt-5.6-sol` in the primary
-thread as orchestrator and delegates only bounded, independent work to a custom
-`gpt-5.6-luna` agent using `model_reasoning_effort = "max"`.
+`lunaria`는 `gpt-5.6-sol`을 주 스레드의 오케스트레이터로 유지하고,
+범위가 명확하며 독립적인 작업만 `model_reasoning_effort = "max"`를 사용하는
+커스텀 `gpt-5.6-luna` 에이전트에게 위임하는 재사용 가능한 Codex 스킬이다.
 
-The repository root is the skill package. The skill includes an explicit setup
-utility for installing and validating `luna_worker`; ordinary orchestration
-does not modify Codex configuration.
+이 저장소의 루트가 곧 스킬 패키지다. 스킬은 `luna_worker`를 명시적으로
+설치하고 검증하는 도구를 포함한다. 일반적인 오케스트레이션 중에는 Codex
+설정을 변경하지 않는다.
 
-## Goals
+## 목표
 
-- Keep requirements, architecture decisions, integration, and final validation
-  in the Sol primary thread.
-- Move noisy, well-bounded analysis, review, implementation, and test work into
-  Luna Max subagent threads.
-- Prevent scope drift, overlapping writes, nested delegation, and silent model
-  substitution.
-- Install `luna_worker` without overwriting unrelated Codex configuration.
-- Detect missing, incompatible, or drifted configuration before delegation.
+- 요구사항, 아키텍처 결정, 통합, 최종 검증을 Sol 주 스레드에 유지한다.
+- 출력이 많지만 경계가 명확한 분석, 리뷰, 구현, 테스트를 Luna Max 서브
+  에이전트 스레드로 분리한다.
+- 범위 이탈, 겹치는 쓰기 작업, 중첩 위임, 모델의 암묵적 대체를 방지한다.
+- 관련 없는 Codex 설정을 덮어쓰지 않고 `luna_worker`를 설치한다.
+- 위임 전에 설정 누락, 비호환, 드리프트를 감지한다.
 
-## Non-goals
+## 목표가 아닌 것
 
-- Replacing Sol as the primary agent.
-- Letting Luna decide product requirements or cross-cutting architecture.
-- Automatically changing `~/.codex/config.toml`.
-- Automatically committing, rebasing, pushing, or changing branches.
-- Guaranteeing model entitlement when an account does not expose
-  `gpt-5.6-luna` or `max` reasoning.
+- Sol을 주 에이전트에서 대체하는 것.
+- Luna가 제품 요구사항이나 여러 영역에 영향을 주는 아키텍처를 결정하게 하는 것.
+- `~/.codex/config.toml`을 자동으로 변경하는 것.
+- 자동으로 커밋, 리베이스, 푸시하거나 브랜치를 변경하는 것.
+- 계정에서 `gpt-5.6-luna` 또는 `max` 추론을 제공하지 않을 때도 사용 가능하다고
+  보장하는 것.
 
-## Package Layout
+## 패키지 구조
 
 ```text
 lunaria/
@@ -45,30 +43,31 @@ lunaria/
     └── test_manage_luna_worker.py
 ```
 
-No README, changelog, or duplicate quick-reference file is included. Runtime
-policy stays in `SKILL.md`; deterministic setup behavior stays in the script.
+README, 변경 이력, 중복된 빠른 참조 문서는 만들지 않는다. 실행 정책은
+`SKILL.md`에, 결정론적인 설정 동작은 스크립트에 둔다.
 
-## Roles
+## 역할
 
-### Sol primary agent
+### Sol 주 에이전트
 
-Sol owns:
+Sol은 다음을 책임진다.
 
-- user intent, constraints, and success criteria;
-- requirement and architecture decisions;
-- task decomposition and dependency ordering;
-- delegation eligibility and task packets;
-- steering or stopping workers;
-- review of worker evidence, diffs, and test results;
-- integration and the final user response.
+- 사용자의 의도, 제약, 성공 조건
+- 요구사항과 아키텍처 결정
+- 작업 분해와 의존성 순서 결정
+- 위임 가능 여부 판단과 작업 패킷 작성
+- 워커 조정 또는 중단
+- 워커가 제출한 근거, diff, 테스트 결과 검토
+- 결과 통합과 사용자에게 전달할 최종 응답
 
 ### `luna_worker`
 
-`luna_worker` is a leaf worker. It may analyze, review, implement, or test only
-inside the task packet supplied by Sol. It must not spawn another agent, broaden
-the goal, make cross-cutting decisions, or perform Git publication operations.
+`luna_worker`는 말단 워커다. Sol이 전달한 작업 패킷 안에서만 분석, 리뷰,
+구현, 테스트를 수행할 수 있다. 다른 에이전트를 생성하거나, 전체 목표를
+확장하거나, 여러 영역에 영향을 주는 결정을 내리거나, Git 배포 작업을
+수행해서는 안 된다.
 
-The custom agent file uses the current standalone-agent schema:
+커스텀 에이전트 파일은 현재 독립형 에이전트 스키마를 사용한다.
 
 ```toml
 name = "luna_worker"
@@ -83,187 +82,184 @@ Report changed files, validation evidence, risks, and decisions needed by Sol.
 """
 ```
 
-Sandbox and approval settings are intentionally omitted so the worker inherits
-the parent turn's live policy.
+워커가 주 작업의 실시간 정책을 상속하도록 샌드박스와 승인 설정은 의도적으로
+생략한다.
 
-## Delegation Decision
+## 위임 판단
 
-Before delegation, Lunaria confirms that the primary thread is running Sol. If
-the active primary model cannot be identified or is not Sol, the skill does not
-pretend the topology is active or try to change the current thread's model. It
-reports the mismatch and asks for a new Sol task when strict Lunaria operation
-is required.
+위임 전에 Lunaria는 주 스레드가 Sol에서 실행 중인지 확인한다. 활성 주 모델을
+식별할 수 없거나 Sol이 아니라면, 구조가 정상 작동하는 것처럼 처리하거나 현재
+스레드의 모델을 변경하지 않는다. 대신 불일치를 알리고, 엄격한 Lunaria 동작이
+필요하다면 새로운 Sol 작업을 시작하도록 안내한다.
 
-Sol delegates only when every required condition is true:
+Sol은 다음 조건이 모두 참일 때만 위임한다.
 
-1. The task has one concrete objective.
-2. Allowed scope and excluded scope are explicit.
-3. Inputs are sufficient without making product or architecture assumptions.
-4. Completion can be demonstrated with named evidence or checks.
-5. The task is independently completable and does not block on another worker.
-6. Its writes, if any, have exclusive ownership and no shared generated output.
+1. 작업에 구체적인 목표가 하나만 있다.
+2. 허용 범위와 제외 범위가 명시되어 있다.
+3. 제품 또는 아키텍처를 추측하지 않아도 입력이 충분하다.
+4. 지정된 근거나 검증 명령으로 완료 여부를 입증할 수 있다.
+5. 다른 워커의 완료를 기다리지 않고 독립적으로 끝낼 수 있다.
+6. 쓰기 작업이 있다면 해당 범위의 소유권이 독점적이며 공유 생성물이 없다.
 
-Sol retains work when requirements are ambiguous, the change crosses major
-module boundaries, shared state or common configuration is involved, external
-side effects need judgment, or the correct solution changes the overall goal.
+요구사항이 모호하거나, 변경이 주요 모듈 경계를 가로지르거나, 공유 상태 또는
+공통 설정을 건드리거나, 외부 부수 효과에 판단이 필요하거나, 올바른 해결책이
+전체 목표를 변경한다면 Sol이 직접 처리한다.
 
-Read-only work may run in parallel. Write work may run in parallel only when
-owned paths are disjoint and neither task can modify shared lockfiles, generated
-artifacts, global format output, migrations, or Git state. Otherwise Sol runs
-write tasks serially.
+읽기 전용 작업은 병렬로 실행할 수 있다. 쓰기 작업은 소유 경로가 서로 겹치지
+않고, 어느 작업도 공유 lockfile, 생성 파일, 전역 포맷 결과, 마이그레이션,
+Git 상태를 변경할 수 없을 때만 병렬로 실행한다. 이 조건을 충족하지 않으면
+Sol이 쓰기 작업을 직렬로 실행한다.
 
-## Task Packet
+## 작업 패킷
 
-Every delegation supplies this contract:
-
-```text
-Objective:
-Allowed scope:
-Excluded scope:
-Inputs and known decisions:
-Deliverable:
-Required validation:
-Escalate when:
-```
-
-The packet describes the desired result, not Sol's hidden chain of thought.
-The allowed scope names concrete modules or paths when file ownership matters.
-
-## Worker Result Contract
-
-Luna returns:
+모든 위임은 다음 계약을 포함한다.
 
 ```text
-Status: complete | blocked | needs_decision
-Summary:
-Files changed:
-Validation run and results:
-Unresolved risks:
-Decision requested from Sol:
+목표(Objective):
+허용 범위(Allowed scope):
+제외 범위(Excluded scope):
+입력과 확정된 결정(Inputs and known decisions):
+산출물(Deliverable):
+필수 검증(Required validation):
+다음 상황에서 상향 전달(Escalate when):
 ```
 
-Raw logs remain in the worker thread unless a short excerpt is necessary as
-evidence. A `complete` result without validation evidence is not accepted as
-complete by Sol.
+작업 패킷은 원하는 결과를 설명하며 Sol의 숨겨진 사고 과정을 전달하지 않는다.
+파일 소유권이 중요할 때는 허용 범위에 구체적인 모듈 또는 경로를 적는다.
 
-## Orchestration Flow
+## 워커 결과 계약
 
-1. **Preflight:** Confirm the primary thread is Sol and the custom agent is
-   discoverable with the pinned Luna model and Max reasoning effort. Static
-   checks validate configuration; the first spawn is the entitlement check.
-2. **Classify:** Separate Sol-owned decisions from delegable work.
-3. **Partition:** Build independent task packets and identify read/write sets.
-4. **Dispatch:** Spawn `luna_worker` only for eligible packets, up to the
-   runtime's available concurrency.
-5. **Observe:** Steer a worker when its task remains valid but needs a bounded
-   correction. Stop it when it breaches scope.
-6. **Collect:** Wait for all workers required by the current dependency stage.
-7. **Verify:** Inspect evidence and diffs, then rerun proportionate checks in
-   the primary thread when risk warrants it.
-8. **Integrate:** Resolve dependencies, make Sol-owned decisions, and produce
-   one coherent final result.
+Luna는 다음 형식으로 결과를 반환한다.
 
-Dependencies are staged rather than dispatched prematurely. A task that needs
-another worker's result is created only after that result is accepted.
+```text
+상태(Status): complete | blocked | needs_decision
+요약(Summary):
+변경한 파일(Files changed):
+실행한 검증과 결과(Validation run and results):
+해결되지 않은 위험(Unresolved risks):
+Sol에게 요청하는 결정(Decision requested from Sol):
+```
 
-## Setup and Configuration Safety
+근거로 짧은 일부가 필요한 경우가 아니라면 원시 로그는 워커 스레드에 남긴다.
+검증 근거 없이 `complete`로 제출된 결과는 Sol이 완료로 인정하지 않는다.
 
-`scripts/manage_luna_worker.py` provides explicit operations:
+## 오케스트레이션 흐름
 
-- `check`: read-only inspection of the Codex version, multi-agent availability,
-  installed TOML syntax, required fields, pinned values, and drift;
-- `plan`: print the exact target and unified diff without writing;
-- `install`: create the personal agent file after an explicit approval in the
-  calling Codex workflow;
-- `verify`: repeat structural and environment checks after installation.
+1. **사전 점검:** 주 스레드가 Sol인지 확인하고, 커스텀 에이전트가 고정된
+   Luna 모델과 Max 추론 설정으로 발견되는지 확인한다. 정적 검사로 설정을
+   검증하고, 첫 생성으로 계정 사용 가능 여부를 확인한다.
+2. **분류:** Sol이 결정해야 할 일과 위임 가능한 일을 분리한다.
+3. **분할:** 독립적인 작업 패킷을 만들고 읽기·쓰기 집합을 식별한다.
+4. **배정:** 적격 패킷만 `luna_worker`에 전달하며, 실행 환경이 허용하는
+   동시 실행 한도를 넘지 않는다.
+5. **관찰:** 작업 자체는 유효하지만 제한된 수정 지시가 필요하면 워커를
+   조정한다. 범위를 위반하면 중단한다.
+6. **수집:** 현재 의존성 단계에 필요한 워커가 모두 끝날 때까지 기다린다.
+7. **검증:** 근거와 diff를 검사한다. 위험도에 따라 주 스레드에서 필요한
+   검증을 다시 실행한다.
+8. **통합:** 의존성을 해결하고 Sol 소유의 결정을 내린 뒤, 하나의 일관된
+   최종 결과를 만든다.
 
-The default target is `~/.codex/agents/luna-worker.toml`. Tests override the
-target with a temporary directory.
+의존성이 있는 작업을 미리 배정하지 않고 단계별로 처리한다. 다른 워커의 결과가
+필요한 작업은 해당 결과가 승인된 후에만 생성한다.
 
-Installation rules:
+## 설정과 구성 안전성
 
-- Never edit `~/.codex/config.toml`.
-- Create a missing agents directory only during explicit installation.
-- Refuse to replace an existing target by default.
-- A requested replacement first writes a timestamped backup and displays the
-  diff.
-- Write through a temporary file and atomically rename it into place.
-- Tell the user to start a new Codex task if agent discovery cannot refresh in
-  the current task.
+`scripts/manage_luna_worker.py`는 다음과 같은 명시적 동작을 제공한다.
 
-## Failure Handling
+- `check`: Codex 버전, 멀티 에이전트 사용 가능 여부, 설치된 TOML 문법,
+  필수 필드, 고정 값, 드리프트를 읽기 전용으로 검사한다.
+- `plan`: 파일을 쓰지 않고 정확한 대상과 unified diff를 출력한다.
+- `install`: 호출한 Codex 작업에서 명시적 승인을 받은 뒤 개인 에이전트
+  파일을 생성한다.
+- `verify`: 설치 후 구조와 실행 환경 검사를 반복한다.
 
-- **Agent missing or drifted:** show `check` output and the setup action; do not
-  silently use a different worker.
-- **Primary thread is not Sol:** report that strict Lunaria topology is inactive
-  and require a new Sol task rather than changing the current model implicitly.
-- **Model or Max effort unavailable:** report the capability failure. Sol may
-  continue locally only when that choice is made explicit.
-- **Ambiguous packet:** Luna returns `needs_decision` without editing.
-- **Scope breach:** Sol stops the worker and reassesses the packet.
-- **Worker failure:** retry once only for a clearly transient failure and with
-  unchanged scope; otherwise Sol handles or reports the task.
-- **Conflicting writes:** stop integration, preserve evidence, and resolve from
-  the primary thread without destructive cleanup.
-- **Approval required:** the worker does not bypass it; the request remains
-  attributable to the originating task.
+기본 대상은 `~/.codex/agents/luna-worker.toml`이다. 테스트에서는 임시
+디렉터리로 대상을 변경한다.
 
-## Testing Strategy
+설치 규칙은 다음과 같다.
 
-### Skill behavior
+- `~/.codex/config.toml`을 변경하지 않는다.
+- 명시적인 설치 중에만 누락된 agents 디렉터리를 만든다.
+- 기본적으로 기존 대상 파일 교체를 거부한다.
+- 교체를 요청하면 먼저 타임스탬프가 포함된 백업을 만들고 diff를 표시한다.
+- 임시 파일에 쓴 뒤 원자적인 이름 변경으로 설치한다.
+- 현재 작업에서 에이전트 목록이 갱신되지 않으면 새로운 Codex 작업을 시작하도록
+  안내한다.
 
-Before authoring `SKILL.md`, run realistic prompts without the skill and record
-whether the agent over-delegates, sends ambiguous packets, allows overlapping
-writes, accepts unsupported conclusions, or substitutes models silently. After
-authoring, run the same scenarios with `lunaria` and require compliance with the
-delegation and result contracts.
+## 실패 처리
 
-Required scenarios include:
+- **에이전트 누락 또는 드리프트:** `check` 결과와 필요한 설정 작업을
+  표시한다. 다른 워커로 암묵적으로 대체하지 않는다.
+- **주 스레드가 Sol이 아님:** 엄격한 Lunaria 구조가 비활성 상태임을 알리고,
+  현재 모델을 암묵적으로 변경하는 대신 새로운 Sol 작업을 요구한다.
+- **모델 또는 Max 추론 사용 불가:** 기능 오류를 알린다. 명시적인 선택이
+  있을 때만 Sol이 직접 계속한다.
+- **모호한 패킷:** Luna는 파일을 수정하지 않고 `needs_decision`을 반환한다.
+- **범위 위반:** Sol은 워커를 중단하고 패킷을 다시 판단한다.
+- **워커 실패:** 명백한 일시적 오류이고 범위가 바뀌지 않을 때만 한 번
+  재시도한다. 그 외에는 Sol이 처리하거나 실패를 보고한다.
+- **쓰기 충돌:** 통합을 중단하고 근거를 보존한다. 파괴적인 정리 없이 주
+  스레드에서 충돌을 해결한다.
+- **승인 필요:** 워커는 승인을 우회하지 않는다. 요청이 어느 작업에서
+  발생했는지 추적 가능한 상태로 유지한다.
 
-- an independent three-part read-only review;
-- two apparently independent implementations that share a lockfile;
-- a bounded implementation that uncovers an architecture decision;
-- unavailable `luna_worker` configuration;
-- a worker result that claims completion without validation evidence.
+## 테스트 전략
 
-### Setup utility
+### 스킬 동작
 
-Unit tests cover:
+`SKILL.md`를 작성하기 전에 스킬 없이 현실적인 요청을 실행한다. 에이전트가
+과도하게 위임하는지, 모호한 패킷을 보내는지, 겹치는 쓰기를 허용하는지,
+근거 없는 결론을 승인하는지, 모델을 암묵적으로 대체하는지 기록한다. 작성
+후에는 `lunaria`를 사용해 같은 시나리오를 실행하고 위임·결과 계약 준수를
+요구한다.
 
-- missing, valid, invalid, and drifted agent files;
-- refusal to overwrite;
-- backup and replacement behavior;
-- unified diff output;
-- atomic installation into a temporary home;
-- version and feature-command parsing;
-- stable exit codes and actionable error messages.
+필수 시나리오는 다음과 같다.
 
-### Deployment checks
+- 서로 독립적인 읽기 전용 리뷰 세 개
+- lockfile을 공유하는, 겉보기에는 독립적인 구현 두 개
+- 진행 중 아키텍처 결정이 필요한 사실을 발견하는 제한된 구현
+- `luna_worker` 설정을 사용할 수 없는 상황
+- 검증 근거 없이 완료를 주장하는 워커 결과
 
-- Run the setup utility unit tests.
-- Run the skill validator against the repository root.
-- Validate `agents/openai.yaml` against `SKILL.md` metadata.
-- Run the behavior scenarios again with the completed skill.
-- Confirm the repository contains no placeholders or unrelated files.
+### 설정 도구
 
-## Compatibility
+단위 테스트는 다음을 다룬다.
 
-The initial implementation targets the locally observed `codex-cli 0.144.1`
-and the official standalone custom-agent requirements current on 2026-08-03:
-`name`, `description`, and `developer_instructions`. `model` and
-`model_reasoning_effort` pin Luna Max behavior.
+- 에이전트 파일이 누락되거나 유효하거나 잘못되거나 드리프트된 경우
+- 기존 파일 덮어쓰기 거부
+- 백업과 교체 동작
+- unified diff 출력
+- 임시 홈 디렉터리에 대한 원자적 설치
+- 버전과 기능 명령 출력 해석
+- 안정적인 종료 코드와 조치 가능한 오류 메시지
 
-The manager validates observable local capabilities instead of assuming that a
-version number alone guarantees agent discovery or model entitlement.
+### 배포 검사
 
-## Acceptance Criteria
+- 설정 도구의 단위 테스트를 실행한다.
+- 저장소 루트에 스킬 검증기를 실행한다.
+- `agents/openai.yaml`이 `SKILL.md` 메타데이터와 일치하는지 검증한다.
+- 완성된 스킬로 동작 시나리오를 다시 실행한다.
+- 저장소에 미완성 표시나 관련 없는 파일이 없는지 확인한다.
 
-The skill is complete when:
+## 호환성
 
-- Codex can discover `lunaria` from valid skill metadata;
-- setup can safely plan, install, and verify `luna_worker`;
-- Sol delegates only contract-compliant bounded work;
-- Luna escalates decisions and scope expansion without continuing edits;
-- parallel write ownership cannot overlap by policy;
-- Sol verifies worker evidence before integration;
-- all automated and forward behavior tests pass.
+초기 구현은 로컬에서 확인한 `codex-cli 0.144.1`과 2026-08-03 현재 공식
+독립형 커스텀 에이전트 필수 항목인 `name`, `description`,
+`developer_instructions`를 대상으로 한다. `model`과
+`model_reasoning_effort`로 Luna Max 동작을 고정한다.
+
+관리 도구는 버전 번호만으로 에이전트 검색 또는 모델 권한을 보장한다고
+가정하지 않고, 로컬에서 관찰 가능한 기능을 검증한다.
+
+## 완료 조건
+
+다음 조건을 모두 충족하면 스킬 구현이 완료된 것이다.
+
+- Codex가 유효한 스킬 메타데이터를 통해 `lunaria`를 발견할 수 있다.
+- 설정 도구가 `luna_worker` 설치를 안전하게 계획, 실행, 검증할 수 있다.
+- Sol이 계약을 충족하는 제한된 작업만 위임한다.
+- Luna가 작업을 계속 수정하지 않고 결정 필요 사항과 범위 확장을 상향 전달한다.
+- 정책상 병렬 쓰기 작업의 소유 범위가 겹칠 수 없다.
+- Sol이 통합 전에 워커 근거를 검증한다.
+- 모든 자동 테스트와 전방 동작 테스트가 통과한다.
