@@ -120,14 +120,24 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("Do not spawn agents", text)
 
     def test_skill_and_worker_forbid_all_git_state_mutations(self) -> None:
-        for path in (ROOT / "SKILL.md", ROOT / "assets/luna-worker.toml"):
+        skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Git 상태를 변경하는 모든 작업을 실행할 수 없다", skill_text)
+        self.assertIn("다음을 포함하되 이에 한정되지 않는다", skill_text)
+
+        worker_text = (ROOT / "assets/luna-worker.toml").read_text(
+            encoding="utf-8"
+        ).lower()
+        self.assertRegex(worker_text, r"any git operation that\s+mutates")
+        self.assertTrue(
+            "including but not limited to" in worker_text
+            or "without limitation" in worker_text
+        )
+
+        for path, text in (
+            (ROOT / "SKILL.md", skill_text.lower()),
+            (ROOT / "assets/luna-worker.toml", worker_text),
+        ):
             with self.subTest(path=path.name):
-                text = path.read_text(encoding="utf-8").lower()
-                self.assertRegex(text, r"any git operation that\s+mutates")
-                self.assertTrue(
-                    "including but not limited to" in text
-                    or "without limitation" in text
-                )
                 for state in (
                     "working tree",
                     "index",
