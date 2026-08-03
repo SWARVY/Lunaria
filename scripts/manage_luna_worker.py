@@ -4,7 +4,7 @@ import argparse
 import difflib
 import os
 import re
-import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -29,6 +29,14 @@ class ExistingAgentError(FileExistsError):
     """Raised when installation would overwrite an existing agent."""
 
 
+class TargetAccessError(OSError):
+    """Raised when the selected target cannot be accessed safely."""
+
+
+class BackupExistsError(FileExistsError):
+    """Raised when installation would overwrite an existing backup."""
+
+
 EXIT_OK = 0
 EXIT_DRIFT = 1
 EXIT_ENVIRONMENT = 2
@@ -39,6 +47,12 @@ class EnvironmentReport:
     version: str | None
     multi_agent_enabled: bool
     errors: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TargetSnapshot:
+    text: str
+    stat_result: os.stat_result
 
 
 def parse_codex_version(output: str) -> str | None:
@@ -113,18 +127,165 @@ def validate_agent_text(text: str) -> tuple[str, ...]:
 
 def render_diff(current: str | None, desired: str, target: Path) -> str:
     """Return a unified diff from current content to desired content."""
-    current_lines = [] if current is None else current.splitlines()
-    desired_lines = desired.splitlines()
+    current_lines = [] if current is None else current.splitlines(keepends=True)
+    desired_lines = desired.splitlines(keepends=True)
     lines = list(
         difflib.unified_diff(
             current_lines,
             desired_lines,
             fromfile="/dev/null" if current is None else str(target),
             tofile=str(target),
-            lineterm="",
+            lineterm="\n",
         )
     )
-    return "\n".join(lines) + ("\n" if lines else "")
+    output: list[str] = []
+    for line in lines:
+        output.append(line)
+        if not line.endswith(("\n", "\r")):
+            output.append("\n\\ No newline at end of file\n")
+    return "".join(output)
+
+
+def _resolved_path(path: Path) -> Path:
+    try:
+        return path.expanduser().resolve(strict=False)
+    except (OSError, RuntimeError) as error:
+        raise TargetAccessError(f"Cannot resolve target {path}: {error}") from error
+
+
+def _ensure_allowed_target(target: Path) -> None:
+    resolved_target = _resolved_path(target)
+    protected = _resolved_path(Path.home() / ".codex" / "config.toml")
+    if resolved_target == protected:
+        raise TargetAccessError(
+            f"Refusing protected Codex config target: {target}"
+        )
+    try:
+        if target.exists() and protected.exists() and target.samefile(protected):
+            raise TargetAccessError(
+                f"Refusing protected Codex config target: {target}"
+            )
+    except TargetAccessError:
+        raise
+    except OSError as error:
+        raise TargetAccessError(f"Cannot resolve target {target}: {error}") from error
+
+
+def _read_target(target: Path) -> TargetSnapshot | None:
+    """Read one regular, non-symlink target without newline conversion."""
+    _ensure_allowed_target(target)
+    try:
+        initial_stat = target.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise TargetAccessError(f"Cannot read target {target}: {error}") from error
+
+    if stat.S_ISLNK(initial_stat.st_mode):
+        raise TargetAccessError(
+            f"Cannot read target {target}: refusing symlink target"
+        )
+    if not stat.S_ISREG(initial_stat.st_mode):
+        raise TargetAccessError(
+            f"Cannot read target {target}: target is not a regular file"
+        )
+
+    descriptor = -1
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(target, flags)
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode):
+            raise TargetAccessError(
+                f"Cannot read target {target}: target is not a regular file"
+            )
+        if not os.path.samestat(initial_stat, opened_stat):
+            raise TargetAccessError(
+                f"Cannot read target {target}: target changed while opening"
+            )
+        with os.fdopen(
+            descriptor,
+            mode="r",
+            encoding="utf-8",
+            newline="",
+        ) as handle:
+            descriptor = -1
+            text = handle.read()
+        return TargetSnapshot(text, opened_stat)
+    except TargetAccessError:
+        raise
+    except (OSError, UnicodeError) as error:
+        raise TargetAccessError(f"Cannot read target {target}: {error}") from error
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _target_matches_snapshot(target: Path, snapshot: TargetSnapshot) -> bool:
+    try:
+        current_stat = target.lstat()
+    except OSError as error:
+        raise TargetAccessError(
+            f"Cannot replace target {target}: {error}"
+        ) from error
+    if stat.S_ISLNK(current_stat.st_mode):
+        raise TargetAccessError(
+            f"Cannot replace target {target}: refusing symlink target"
+        )
+    expected = snapshot.stat_result
+    return (
+        os.path.samestat(current_stat, expected)
+        and current_stat.st_mode == expected.st_mode
+        and current_stat.st_size == expected.st_size
+        and current_stat.st_mtime_ns == expected.st_mtime_ns
+    )
+
+
+def _create_backup(
+    target: Path,
+    snapshot: TargetSnapshot,
+    timestamp: str | None,
+) -> Path:
+    stamp = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup = Path(f"{target}.bak-{stamp}")
+    descriptor = -1
+    created = False
+    try:
+        descriptor = os.open(
+            backup,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            stat.S_IMODE(snapshot.stat_result.st_mode),
+        )
+        created = True
+        with os.fdopen(
+            descriptor,
+            mode="w",
+            encoding="utf-8",
+            newline="",
+        ) as handle:
+            descriptor = -1
+            handle.write(snapshot.text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(backup, stat.S_IMODE(snapshot.stat_result.st_mode))
+        os.utime(
+            backup,
+            ns=(
+                snapshot.stat_result.st_atime_ns,
+                snapshot.stat_result.st_mtime_ns,
+            ),
+        )
+    except FileExistsError as error:
+        raise BackupExistsError(
+            f"Backup already exists; refusing to overwrite: {backup}"
+        ) from error
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if created:
+            backup.unlink(missing_ok=True)
+        raise
+    return backup
 
 
 def install_agent(
@@ -135,18 +296,16 @@ def install_agent(
     timestamp: str | None = None,
 ) -> Path | None:
     """Validate and atomically install desired, returning a backup path if made."""
+    _ensure_allowed_target(target)
     errors = validate_agent_text(desired)
     if errors:
         raise AgentConfigError("; ".join(errors))
-    if target.exists() and not replace:
+    snapshot = _read_target(target)
+    if snapshot is not None and not replace:
         raise ExistingAgentError(f"Refusing to replace existing agent: {target}")
 
     target.parent.mkdir(parents=True, exist_ok=True)
     backup: Path | None = None
-    if target.exists():
-        stamp = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        backup = Path(f"{target}.bak-{stamp}")
-        shutil.copy2(target, backup)
 
     handle = tempfile.NamedTemporaryFile(
         mode="w",
@@ -161,7 +320,26 @@ def install_agent(
             handle.write(desired)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, target)
+        _ensure_allowed_target(target)
+        if snapshot is None:
+            try:
+                os.link(temporary, target, follow_symlinks=False)
+            except FileExistsError as error:
+                raise ExistingAgentError(
+                    f"Refusing to replace target created during install: {target}"
+                ) from error
+        else:
+            if not _target_matches_snapshot(target, snapshot):
+                raise TargetAccessError(
+                    f"Cannot replace target {target}: target changed during install"
+                )
+            backup = _create_backup(target, snapshot, timestamp)
+            if not _target_matches_snapshot(target, snapshot):
+                raise TargetAccessError(
+                    f"Cannot replace target {target}: target changed during install"
+                )
+            os.replace(temporary, target)
+        temporary.unlink(missing_ok=True)
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
@@ -204,10 +382,14 @@ def _read_desired(template: Path) -> str:
     return desired
 
 
-def _installed_errors(target: Path, desired: str) -> tuple[str, ...]:
-    if not target.exists():
+def _installed_errors(
+    target: Path,
+    desired: str,
+    snapshot: TargetSnapshot | None,
+) -> tuple[str, ...]:
+    if snapshot is None:
         return (f"Agent is missing: {target}",)
-    installed = target.read_text(encoding="utf-8")
+    installed = snapshot.text
     errors = list(validate_agent_text(installed))
     if installed != desired:
         errors.append(f"Installed agent differs from template: {target}")
@@ -218,19 +400,21 @@ def main(argv: list[str] | None = None) -> int:
     """Run check, plan, install, or verify and return a stable exit code."""
     args = build_parser().parse_args(argv)
     try:
+        _ensure_allowed_target(args.target)
         desired = _read_desired(args.template)
-    except (OSError, AgentConfigError) as error:
+        snapshot = _read_target(args.target)
+    except (OSError, UnicodeError, AgentConfigError) as error:
         print(f"error: {error}", file=sys.stderr)
         return EXIT_ENVIRONMENT
 
     if args.command == "plan":
-        current = args.target.read_text(encoding="utf-8") if args.target.exists() else None
+        current = None if snapshot is None else snapshot.text
         print(f"Target: {args.target}")
         print(render_diff(current, desired, args.target), end="")
         return EXIT_OK
 
     if args.command == "install":
-        current = args.target.read_text(encoding="utf-8") if args.target.exists() else None
+        current = None if snapshot is None else snapshot.text
         print(render_diff(current, desired, args.target), end="")
         try:
             backup = install_agent(desired, args.target, replace=args.replace)
@@ -243,10 +427,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Installed: {args.target}")
         if backup is not None:
             print(f"Backup: {backup}")
+        print(
+            "If this task has not refreshed custom-agent discovery, "
+            "start a new Codex task."
+        )
         return EXIT_OK
 
     report = run_environment_check(args.codex_bin)
-    drift = _installed_errors(args.target, desired)
+    drift = _installed_errors(args.target, desired, snapshot)
     if report.version is not None:
         print(f"Codex CLI: {report.version}")
     for error in report.errors + drift:

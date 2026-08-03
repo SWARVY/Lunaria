@@ -14,12 +14,17 @@ Sol decides and integrates. Luna executes bounded task packets as a leaf worker.
 - Confirm the primary model is exactly `gpt-5.6-sol`.
   If the primary model cannot be identified or differs, report that strict
   Lunaria topology is inactive.
+- Before every delegation, resolve this skill's directory and run
+  `python3 -B scripts/manage_luna_worker.py check` with the manager's default
+  template and default target. Role visibility alone does not satisfy this
+  preflight. Proceed only when `check` returns exit 0.
 - Confirm the `luna_worker` custom role is available. Never silently substitute
   another model or role.
-- Treat the first `luna_worker` spawn as the model-entitlement check. If Luna or
-  Max is unavailable, report it; continue in Sol only after that choice is explicit.
-- If setup is missing or drifted, run this skill's manager in `check` and `plan`
-  modes. Run `install` only after explicit approval, then run `verify`.
+- After a successful `check`, treat the first live `luna_worker` spawn as the
+  discovery, model, and Max entitlement check. If Luna or Max is unavailable,
+  report it; continue in Sol only after that choice is explicit.
+- If `check` reports missing or drifted setup, run `plan`. Run `install` only
+  after explicit approval, then run `verify` and repeat `check` before delegation.
 
 ## Delegation gate
 
@@ -35,8 +40,12 @@ Read-only packets may run in parallel. Parallel writes require exclusive paths
 and no shared lockfiles, generated artifacts, format output, migrations, or Git
 state. Logical paths, not worktrees or branches, define ownership: separate
 worktrees and planned conflict resolution never justify overlapping writes.
-Serialize all overlapping writes. Luna never commits, rebases, pushes, switches
-branches, or spawns agents.
+Serialize all overlapping writes. Luna must not run any Git operation that
+mutates the working tree, index, refs, branches, tags, stash, or worktrees,
+including but not limited to `git commit`, `git add`, `git reset`, `git merge`,
+`git rebase`, `git stash`, `git clean`, `git cherry-pick`, `git revert`,
+`git tag`, `git switch`, `git checkout`, `git push`, or `git worktree` changes.
+Luna must not spawn agents.
 
 ## Task packet
 
