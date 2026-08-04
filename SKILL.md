@@ -57,8 +57,10 @@ Luna는 아키텍처 결정을 내릴 수 없다.
 기준이며 worktree나 branch 분리는 쓰기 범위가 겹치는 작업을 정당화하지 않는다.
 겹치는 모든 쓰기는 직렬화한다. 다른 작업자나 사용자의 변경을 되돌리지 않는다.
 
-Luna는 다음 Git 상태를 변경하는 모든 작업을 실행할 수 없다: working tree, index,
-refs, branches, tags, stash, worktrees. 금지 작업은 다음을 포함하되 이에 한정되지 않는다:
+Luna는 다음 상태를 변경하는 모든 Git 작업/명령을 실행할 수 없다: working tree, index,
+refs, branches, tags, stash, worktrees. 단, 수락된 작업 패킷의
+`Files and ownership:`에 속한 일반 파일 편집은 허용된다.
+금지 작업은 다음을 포함하되 이에 한정되지 않는다:
 `git commit`, `git add`, `git reset`, `git merge`, `git rebase`, `git stash`,
 `git clean`, `git cherry-pick`, `git revert`, `git tag`, `git switch`,
 `git checkout`, `git push`, `git worktree`. Luna는 다른 에이전트를 생성할 수 없다.

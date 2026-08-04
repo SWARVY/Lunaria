@@ -119,10 +119,14 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn('model_reasoning_effort = "max"', text)
         self.assertIn("Do not spawn agents", text)
 
-    def test_skill_and_worker_forbid_all_git_state_mutations(self) -> None:
+    def test_git_mutations_are_forbidden_but_owned_file_edits_are_allowed(self) -> None:
         skill_text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("Git 상태를 변경하는 모든 작업을 실행할 수 없다", skill_text)
+        self.assertIn("모든 Git 작업/명령을 실행할 수 없다", skill_text)
         self.assertIn("다음을 포함하되 이에 한정되지 않는다", skill_text)
+        self.assertIn(
+            "`Files and ownership:`에 속한 일반 파일 편집은 허용된다",
+            skill_text,
+        )
 
         worker_text = (ROOT / "assets/luna-worker.toml").read_text(
             encoding="utf-8"
