@@ -1,0 +1,25 @@
+# Local planning and review artifacts
+docs/superpowers/
+.superpowers/sdd/
+
+# macOS
+.DS_Store
+
+# Python caches and reports
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Editors
+.idea/
+.vscode/
+*.swp
