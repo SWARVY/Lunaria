@@ -23,6 +23,7 @@
   <a href="#왜-lunaria인가">철학</a> ·
   <a href="#작동-구조">구조</a> ·
   <a href="#언제-사용하는가">사용 조건</a> ·
+  <a href="#운영-효율">운영 효율</a> ·
   <a href="#안전장치">안전장치</a> ·
   <a href="#명령어">명령어</a>
 </p>
@@ -147,6 +148,8 @@ Excluded scope:
 Files and ownership:
 Interfaces:
 Inputs and known decisions:
+Expected duration and stop condition:
+Validation tier:
 Deliverable:
 Required validation:
 Escalate when:
@@ -194,6 +197,38 @@ Decision requested from Sol:
 
 Luna는 목표를 확장하거나 불명확한 아키텍처를 임의로 결정하지 않습니다. 경계를 넘는
 판단이 필요하면 `needs_decision`으로 Sol에 반환합니다.
+
+---
+
+## 운영 효율
+
+### 위임 경제성
+
+예상 5분 미만이면서 기계적인 단일 단계인 작업은 Sol이 직접 처리합니다. 시간이나 파일
+수만으로 복잡도를 판단하지 않으며, 깊은 분석과 독립 검증의 가치가 준비·대기·재검증
+비용보다 클 때만 Luna에 위임합니다.
+
+한 구현 단계의 기본 예산은 구현자 1명과 리뷰어 1명입니다. Minor 지적은 Sol이 직접
+수정·검증하고, Important 또는 Critical 문제가 남을 때만 재리뷰를 한 번 요청합니다.
+완료된 워커에 대한 후속 지시는 동일 목표의 보정 1회까지만 허용합니다. 목표나 파일
+소유권이 바뀌면 새 작업 패킷을 만들거나 Sol이 직접 처리합니다.
+
+### 단계별 검증
+
+| 단계 | 검증 |
+|:---|:---|
+| 워커 | 작업 범위의 좁은 테스트 |
+| Sol 수용 | 실제 diff·소유권 확인과 좁은 테스트 재실행 |
+| 단계 통합 | 전체 test, typecheck, build를 한 번 실행 |
+| 최종 통합 | commit, PR, 배포 workflow가 요구하는 최신 검증 |
+
+새 변경이나 실패 수정 없이 동일한 전체 검증을 반복하지 않습니다. 큰 통합이나 PR이
+끝나고 다음 목표가 독립적이면 결정 문서를 인계점으로 삼아 새 Codex 작업을 시작하는
+것을 권장합니다.
+
+단계가 끝나면 Sol은 위임·완료·취소 수, worker 시간, 후속 지시·중단·재시도, 실행한 검증을
+오케스트레이션 요약으로 보고합니다. 토큰과 메인 턴 수는 공개 metadata에서 확인될 때만
+기록하고, 확인할 수 없으면 `unavailable`로 남깁니다.
 
 ---
 
@@ -267,6 +302,8 @@ Lunaria는 **토큰 절약을 보장하는 도구가 아닙니다.** 각 worker�
 5. Sol과 모든 Luna worker를 합친 전체 토큰
 
 짧거나 강하게 결합된 작업에서 작업당 토큰이 증가한다면 위임하지 않는 것이 정상입니다.
+측정 때문에 내부 세션이나 rollout을 읽지 않으며 공개 metadata가 없는 값은 추정하지
+않습니다.
 
 ---
 
