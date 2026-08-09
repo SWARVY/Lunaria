@@ -41,11 +41,70 @@ class SkillContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, text)
 
+    def test_delegation_economics_keeps_small_mechanical_work_in_sol(self) -> None:
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "## 위임 경제성 게이트",
+            "5분 미만",
+            "기계적 단일 단계",
+            "Sol이 직접 처리",
+            "숫자만으로 위임을 차단하지 않는다",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_review_budget_and_worker_lease_stop_unbounded_loops(self) -> None:
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "구현자 1명과 리뷰어 1명",
+            "Important 또는 Critical",
+            "동일 목표의 보정 1회",
+            "새 작업 패킷",
+            "catch-all worker",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_validation_is_tiered_and_unchanged_full_suites_are_not_repeated(self) -> None:
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "워커 검증",
+            "수용 검증",
+            "단계 통합 검증",
+            "최종 검증",
+            "관련 변경 없이 동일한 전체 검증을 반복하지 않는다",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_task_packet_and_sol_summary_expose_orchestration_costs(self) -> None:
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "Expected duration and stop condition:",
+            "Validation tier:",
+            "## Sol 오케스트레이션 요약",
+            "Delegations:",
+            "Completed / cancelled:",
+            "Follow-ups / interrupts / retries:",
+            "Token evidence:",
+            "관측할 수 없으면 `unavailable`",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_completed_phase_can_handoff_to_a_fresh_main_task(self) -> None:
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "## 단계 경계",
+            "큰 통합 또는 PR 병합",
+            "새 Codex 작업",
+            "결정 문서",
+        ):
+            self.assertIn(phrase, text)
+
     def test_task_packet_includes_ownership_interfaces_and_concurrent_edit_safety(self) -> None:
         text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         for phrase in (
             "Files and ownership:",
             "Interfaces:",
+            "Expected duration and stop condition:",
+            "Validation tier:",
             "다른 작업자나 사용자의 변경을 되돌리지 않는다",
         ):
             self.assertIn(phrase, text)

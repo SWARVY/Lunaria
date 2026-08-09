@@ -28,6 +28,17 @@ Luna Max는 경계가 명확한 작업 패킷만 처리하는 말단 워커다.
 - 외부 부수 효과나 최종 승인이 필요한 작업
 - 작은 단일 단계 수정
 
+## 위임 경제성 게이트
+
+위임 전에 작업 패킷 작성, 대기, 결과 수용과 재검증 비용을 포함해 Sol의 직접 처리와
+비교한다. 예상 5분 미만이면서 기계적 단일 단계인 작업은 Sol이 직접 처리한다. 파일 수나
+예상 시간 같은 숫자만으로 위임을 차단하지 않는다. 깊은 분석이나 독립 검증 가치가 그
+비용보다 크면 작은 파일 범위도 위임할 수 있다.
+
+위임할 때는 예상 소요 시간과 중단 조건, 워커·수용·통합 중 어느 검증 단계인지 작업
+패킷에 기록한다. 중단 조건에 도달하면 반복 대기하지 말고 근거를 확인해 작업을 분할하거나
+Sol로 회수한다.
+
 ## 사전 점검
 
 - 메인 모델이 정확히 `gpt-5.6-sol`인지 확인한다. 메인 모델을 식별할 수 없거나
@@ -57,6 +68,15 @@ Luna는 아키텍처 결정을 내릴 수 없다.
 기준이며 worktree나 branch 분리는 쓰기 범위가 겹치는 작업을 정당화하지 않는다.
 겹치는 모든 쓰기는 직렬화한다. 다른 작업자나 사용자의 변경을 되돌리지 않는다.
 
+한 구현 단계의 기본 리뷰 예산은 구현자 1명과 리뷰어 1명이다. Minor 지적만 남으면 Sol이
+직접 수정하고 검증한다. Important 또는 Critical 문제가 해결되지 않았을 때만 같은
+리뷰어에게 재리뷰를 한 번 요청한다. 그 뒤에도 해결되지 않으면 Sol이 작업을 분할하거나
+결정을 요청하며 리뷰 루프를 계속하지 않는다.
+
+완료된 워커에 대한 후속 지시는 동일 목표의 보정 1회로 제한한다. 목표, 허용 범위, 파일
+소유권이나 산출물이 바뀌면 새 작업 패킷으로 새 `luna_worker`를 생성하거나 Sol이 직접
+처리한다. 여러 목표를 계속 맡기는 catch-all worker로 재사용하지 않는다.
+
 Luna는 다음 상태를 변경하는 모든 Git 작업/명령을 실행할 수 없다: working tree, index,
 refs, branches, tags, stash, worktrees. 단, 수락된 작업 패킷의
 `Files and ownership:`에 속한 일반 파일 편집은 허용된다.
@@ -73,6 +93,8 @@ Excluded scope:
 Files and ownership:
 Interfaces:
 Inputs and known decisions:
+Expected duration and stop condition:
+Validation tier:
 Deliverable:
 Required validation:
 Escalate when:
@@ -97,6 +119,38 @@ Decision requested from Sol:
 변경 범위를 확인하고 검증 명령을 직접 다시 실행한다. 검증 증거 없는 `complete`는
 미완료로 처리한다. 짧은 발췌가 꼭 필요한 증거인 경우를 제외하고 원시 워커 로그를
 메인 컨텍스트에 넣지 않는다.
+
+검증은 다음 단계로 나눈다.
+
+- 워커 검증: 작업 패킷의 좁은 `Required validation`을 실행한다.
+- 수용 검증: Sol이 범위와 diff를 확인하고 같은 좁은 검증을 한 번 다시 실행한다.
+- 단계 통합 검증: 수용된 작업을 모은 뒤 전체 test, typecheck, build를 단계당 한 번 실행한다.
+- 최종 검증: commit, PR, 배포처럼 별도 workflow가 요구하는 최신 전체 검증을 실행한다.
+
+실패 수정이나 새 변경이 없는 상태에서는 관련 변경 없이 동일한 전체 검증을 반복하지 않는다.
+다른 skill이나 외부 계약이 최신 검증을 요구하면 최종 검증이 우선한다.
+
+## 단계 경계
+
+큰 통합 또는 PR 병합 뒤 다음 단계의 목표가 독립적이고 결정 문서, 계획, 테스트가 인계에
+충분하면 새 Codex 작업을 제안한다. 사용자가 같은 작업 유지를 원하면 따르되, 원시 로그
+대신 결정 문서와 미해결 위험만 다음 단계의 컨텍스트로 유지한다.
+
+## Sol 오케스트레이션 요약
+
+Lunaria를 사용한 단계가 끝나면 Sol이 다음 집계를 짧게 보고한다.
+
+Delegations:
+Completed / cancelled:
+Worker elapsed:
+Follow-ups / interrupts / retries:
+Validation matrix:
+Main-thread turns:
+Token evidence:
+
+집계는 공개된 도구와 모델 metadata만 사용한다. 토큰이나 턴 값을 관측할 수 없으면
+`unavailable`로 기록한다. 즉, 관측할 수 없으면 `unavailable`이며 값을 추정하지 않는다.
+이 요약을 위해 내부 rollout 또는 세션 파일을 읽지 않는다.
 
 ## 설정 안전성
 
