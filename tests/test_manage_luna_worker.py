@@ -26,6 +26,12 @@ class ValidationTests(unittest.TestCase):
     def test_valid_agent_has_no_errors(self) -> None:
         self.assertEqual(manager.validate_agent_text(VALID_AGENT), ())
 
+    def test_repository_agent_template_is_valid(self) -> None:
+        template = (ROOT / "assets" / "luna-worker.toml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(manager.validate_agent_text(template), ())
+
     def test_invalid_toml_reports_syntax_error(self) -> None:
         errors = manager.validate_agent_text('name = "unterminated')
         self.assertTrue(any("TOML" in error for error in errors))
