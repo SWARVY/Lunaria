@@ -150,6 +150,9 @@ Interfaces:
 Inputs and known decisions:
 Expected duration and stop condition:
 Validation tier:
+Orchestration owner and mode:
+Active worker and wait budget:
+Stage boundary and review trigger:
 Deliverable:
 Required validation:
 Escalate when:
@@ -202,6 +205,34 @@ Luna는 목표를 확장하거나 불명확한 아키텍처를 임의로 결정�
 
 ## 운영 효율
 
+### 다른 오케스트레이션 스킬과 조합
+
+다른 오케스트레이션 스킬과 함께 사용할 때 각 스킬의 구현자·리뷰어 루프를 더하지
+않습니다. 현재 단계의 작업 분배, 리뷰, 재시도와 대기는 실행 오케스트레이터 하나가
+소유합니다.
+
+품질 게이트 모드에서는 Lunaria가 실행 예산을 소유합니다. 다른 스킬은 계획과 기법만 사용하고,
+자체 구현자·작업별 리뷰어·수정/재리뷰 루프는 실행하지 않습니다. Sol 또는 경계가 명확한
+Luna가 구현하고, Sol이 결과를 수용한 뒤 단계 경계에서 독립 리뷰어 1명을 사용합니다.
+이때 단계는 개별 task가 아니라 사용자 가치나 milestone 하나를 완료해 하나의 통합 검증을
+실행하는 작업 묶음입니다. 첫 위임 전에 단계 경계와 리뷰 시작 조건을 고정합니다.
+외부 workflow의 final whole-branch reviewer가 필요하면 Lunaria의 단계 리뷰어 1명으로 간주하고
+별도로 추가하지 않습니다.
+
+다른 workflow의 전체 작업별 루프를 그대로 실행해야 한다면 Lunaria 조합 모드를 사용하지 않습니다.
+두 모드를 동시에 적용하지 않으며, 어느 쪽을 적용할지 불명확하면 첫 에이전트를
+만들기 전에 결정합니다.
+
+### 동시성과 대기 예산
+
+기본 운영 예산은 활성 Luna 2명입니다. 플랫폼에 세 번째 슬롯이 있으면 구현 작업으로
+채우지 않고 리뷰어용 슬롯으로 남깁니다. 독립 읽기·분석·QA는 이 범위에서 병렬화할 수
+있지만 공유 파일과 순차 상태 전환은 직렬로 처리합니다.
+
+Sol이 직접 진행할 일이 없을 때만 실행 중인 worker를 묶어서 기다립니다. 상태 변화 없이
+개별 worker를 반복 polling하지 않으며, 수용과 동일 목표의 보정이 끝난 worker는 닫아
+슬롯을 반환합니다.
+
 ### 위임 경제성
 
 예상 5분 미만이면서 기계적인 단일 단계인 작업은 Sol이 직접 처리합니다. 시간이나 파일
@@ -228,7 +259,8 @@ Luna는 목표를 확장하거나 불명확한 아키텍처를 임의로 결정�
 
 단계가 끝나면 Sol은 위임·완료·취소 수, worker 시간, 후속 지시·중단·재시도, 실행한 검증을
 오케스트레이션 요약으로 보고합니다. 토큰과 메인 턴 수는 공개 metadata에서 확인될 때만
-기록하고, 확인할 수 없으면 `unavailable`로 남깁니다.
+기록하고, 확인할 수 없으면 `unavailable`로 남깁니다. 대기 비용은 `Peak active workers`와
+`Wait calls / unchanged timeouts`로 함께 기록합니다.
 
 ---
 
