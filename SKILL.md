@@ -1,14 +1,16 @@
 ---
 name: lunaria
-description: Use when a Sol primary agent has bounded, independently verifiable coding subtasks that can be delegated without giving up requirements, architecture, or final integration decisions.
+description: Use when the active Codex primary agent needs to delegate bounded, independently verifiable coding subtasks to Luna Max while retaining requirements, architecture, and final integration decisions.
 ---
 
-# Lunaria로 Sol과 Luna Max 오케스트레이션하기
+# Codex 주 에이전트와 Luna Max 오케스트레이션
 
 ## 핵심 원칙
 
-Sol은 메인 스레드에서 목표, 요구사항, 아키텍처, 분해, 검증, 통합을 소유한다.
-Luna Max는 경계가 명확한 작업 패킷만 처리하는 말단 워커다.
+Codex 작업에서 사용자가 선택한 모델이 주 에이전트 역할을 맡아 메인 스레드에서 목표,
+요구사항, 아키텍처, 분해, 검증, 통합을 소유한다. Lunaria는 특정 주 모델 ID를 요구하지 않는다.
+
+명시적으로 spawn한 Luna Max worker는 경계가 명확한 작업 패킷만 처리하는 말단 워커다.
 모든 구현을 Luna에 강제하지 않는다.
 
 ## 언제 Luna Max를 사용하는가
@@ -19,7 +21,7 @@ Luna Max는 경계가 명확한 작업 패킷만 처리하는 말단 워커다.
 - 테스트 작성, 실패 원인 조사, 검증
 - 서로 의존하지 않는 읽기 전용 조사
 
-작업 패킷 작성과 결과 검증을 포함한 위임 비용이 Sol의 직접 처리보다 작을 때만 위임한다.
+작업 패킷 작성과 결과 검증을 포함한 위임 비용이 주 에이전트의 직접 처리보다 작을 때만 위임한다.
 
 ## 위임하지 않는 작업
 
@@ -30,14 +32,14 @@ Luna Max는 경계가 명확한 작업 패킷만 처리하는 말단 워커다.
 
 ## 위임 경제성 게이트
 
-위임 전에 작업 패킷 작성, 대기, 결과 수용과 재검증 비용을 포함해 Sol의 직접 처리와
-비교한다. 예상 5분 미만이면서 기계적 단일 단계인 작업은 Sol이 직접 처리한다. 파일 수나
+위임 전에 작업 패킷 작성, 대기, 결과 수용과 재검증 비용을 포함해 주 에이전트의 직접 처리와
+비교한다. 예상 5분 미만이면서 기계적 단일 단계인 작업은 주 에이전트가 직접 처리한다. 파일 수나
 예상 시간 같은 숫자만으로 위임을 차단하지 않는다. 깊은 분석이나 독립 검증 가치가 그
 비용보다 크면 작은 파일 범위도 위임할 수 있다.
 
 위임할 때는 예상 소요 시간과 중단 조건, 워커·수용·통합 중 어느 검증 단계인지 작업
 패킷에 기록한다. 중단 조건에 도달하면 반복 대기하지 말고 근거를 확인해 작업을 분할하거나
-Sol로 회수한다.
+주 에이전트로 회수한다.
 
 ## 오케스트레이션 소유권
 
@@ -46,10 +48,14 @@ Sol로 회수한다.
 다른 skill이 작업별 구현자·리뷰어·수정 루프를 요구해도 각 skill의 에이전트 루프를
 자동 합산하지 않는다.
 
-다른 skill과 함께 쓰는 품질 게이트 모드에서는 Lunaria가 실행 예산을 소유한다. 다른
+일부 Codex 모델 설정은 subagent 작업을 자동 위임할 수 있다. Lunaria가 관리하는 위임은
+명시적 `luna_worker` native spawn으로 한정한다. 자동 위임 설정의 사전 확인과 처리 절차는
+`사전 점검`을 따른다.
+
+Lunaria 명시적 위임 모드에서 품질 게이트를 사용할 때는 Lunaria가 실행 예산을 소유한다. 다른
 skill은 계획·기법만 제공하고 자체 fresh implementer, 작업별 reviewer, 수정·재리뷰
-loop를 실행하지 않으며 작업별 리뷰를 중복하지 않는다. Sol 또는 경계가 명확한 Luna
-implementer가 작업하고, Sol이 결과를 수용한 뒤 단계 경계에서 독립 리뷰어 1명을 사용한다.
+loop를 실행하지 않으며 작업별 리뷰를 중복하지 않는다. 주 에이전트 또는 경계가 명확한 Luna
+implementer가 작업하고, 주 에이전트가 결과를 수용한 뒤 단계 경계에서 독립 리뷰어 1명을 사용한다.
 여기서 단계는 개별 task가 아니라 사용자 가치나 milestone 하나를 완료해 하나의 통합 검증을
 실행하는 작업 묶음이다. 첫 위임 전에 단계 경계와 리뷰 시작 조건을 작업 패킷에 고정한다.
 외부 workflow의 final whole-branch reviewer가 필요하면 Lunaria의 단계 리뷰어 1명으로 간주하고
@@ -68,18 +74,20 @@ implementer가 작업하고, Sol이 결과를 수용한 뒤 단계 경계에서 
 예정되고 세 번째 슬롯을 사용할 수 있으면 리뷰어용 슬롯으로 남긴다. 슬롯을 채우기 위해
 불필요한 작업을 만들지 않으며 이 값은 전체 생성 수가 아니라 동시 활성 수다.
 
-Sol이 진행할 수 있는 요구사항 정리, 수용 검증이나 통합 작업이 남아 있으면 먼저 수행한다.
+주 에이전트가 진행할 수 있는 요구사항 정리, 수용 검증이나 통합 작업이 남아 있으면 먼저 수행한다.
 더 진행할 일이 없을 때만 실행 중 worker들을 묶어서 한 번만 기다린다.
 상태 변화 없이 개별 worker를 반복 polling하지 않는다. timeout 뒤에도 상태가 같으면 중단
-조건과 남은 Sol 작업을 확인한 뒤 backoff하거나 회수한다.
+조건과 남은 주 에이전트 작업을 확인한 뒤 backoff하거나 회수한다.
 
 결과 수용과 허용된 동일 목표 보정이 끝나면 완료된 worker를 닫아 슬롯을 반환한다.
 
 ## 사전 점검
 
-- 메인 모델이 정확히 `gpt-5.6-sol`인지 확인한다. 메인 모델을 식별할 수 없거나
-  다르면 엄격한 Lunaria 토폴로지가 비활성임을 보고한다.
-- 위임 전마다 이 스킬 디렉터리를 기준으로 관리자의 기본 템플릿과 기본 대상을 사용해
+- 현재 Codex 작업에서 사용자가 선택한 주 모델을 사용한다. native agent spawn을 사용할 수
+  없으면 그 제약을 보고하고 위임을 진행하지 않는다.
+- 모델 설정의 자동 subagent 위임이 켜져 있으면 현재 주 모델에서 해당 설정을 조정한다.
+  조정할 수 없으면 worker를 spawn하지 말고 Lunaria의 worker 계약을 적용할 수 없다고 보고한다.
+- 각 `luna_worker` spawn 전에 이 스킬 디렉터리의 기본 템플릿과 관리자의 기본 대상을 사용해
   `python3 -B scripts/manage_luna_worker.py check`를 실행한다. 관리자는 Codex에 표시된
   `max` reasoning 지원 Luna 모델 목록을 최신순으로 출력한다. Worker 설정에는 모델을
   고정하지 않으며, 각 spawn에 `model=<목록의 첫 후보>`와 `reasoning_effort="max"`를
@@ -89,7 +97,7 @@ Sol이 진행할 수 있는 요구사항 정리, 수용 검증이나 통합 작�
   제한된 최신순 Luna 후보 규칙으로만 바꿀 수 있다.
 - 최신 모델이 명시적으로 unavailable/unsupported 오류로 거절되면, 같은 `luna_worker`
   역할로 목록의 다음 Luna 모델을 시도한다. 모델 사용 불가 오류가 아닌 실패는 재시도하지
-  않는다. Max를 지원하는 Luna를 하나도 실행할 수 없으면 보고하고, Sol 단독 진행은 그
+  않는다. Max를 지원하는 Luna를 하나도 실행할 수 없으면 보고하고, 주 에이전트 단독 진행은 그
   선택이 명시된 뒤에만 허용한다.
 - 공개된 native spawn 또는 details metadata에서 역할, 모델, reasoning effort를
   확인할 수 있으면 `luna_worker`, spawn에 지정한 Luna 모델, `max`와 대조한다. 관측하지
@@ -102,7 +110,7 @@ Sol이 진행할 수 있는 요구사항 정리, 수용 검증이나 통합 작�
 
 하나의 목표, 명시적인 허용·제외 범위, 충분한 입력, 구체적인 산출물, 필수 검증,
 에스컬레이션 조건이 모두 있을 때만 위임한다. 요구사항, 교차 아키텍처, 의존성 순서,
-공유 설정, 외부 부수 효과 결정, 최종 통합은 Sol이 유지한다. Luna는 목표를 확장할 수 없다.
+공유 설정, 외부 부수 효과 결정, 최종 통합은 주 에이전트가 유지한다. Luna는 목표를 확장할 수 없다.
 Luna는 아키텍처 결정을 내릴 수 없다.
 
 읽기 전용 패킷은 병렬 실행할 수 있다. 병렬 쓰기는 경로가 독점적이고 공유 lockfile,
@@ -112,12 +120,12 @@ Luna는 아키텍처 결정을 내릴 수 없다.
 
 Lunaria 단독 모드의 구현 단계 기본 리뷰 예산은 구현자 1명과 리뷰어 1명이다. 다른 skill과
 함께 쓰는 품질 게이트 모드에서는 작업별 리뷰 대신 단계 리뷰 1명만 사용한다. Minor
-지적만 남으면 Sol이 직접 수정하고 검증한다. Important 또는 Critical 문제가 해결되지 않았을 때만 같은
-리뷰어에게 재리뷰를 한 번 요청한다. 그 뒤에도 해결되지 않으면 Sol이 작업을 분할하거나
+지적만 남으면 주 에이전트가 직접 수정하고 검증한다. Important 또는 Critical 문제가 해결되지 않았을 때만 같은
+리뷰어에게 재리뷰를 한 번 요청한다. 그 뒤에도 해결되지 않으면 주 에이전트가 작업을 분할하거나
 결정을 요청하며 리뷰 루프를 계속하지 않는다.
 
 완료된 워커에 대한 후속 지시는 동일 목표의 보정 1회로 제한한다. 목표, 허용 범위, 파일
-소유권이나 산출물이 바뀌면 새 작업 패킷으로 새 `luna_worker`를 생성하거나 Sol이 직접
+소유권이나 산출물이 바뀌면 새 작업 패킷으로 새 `luna_worker`를 생성하거나 주 에이전트가 직접
 처리한다. 여러 목표를 계속 맡기는 catch-all worker로 재사용하지 않는다.
 
 Luna는 다음 상태를 변경하는 모든 Git 작업/명령을 실행할 수 없다: working tree, index,
@@ -148,7 +156,7 @@ Escalate when:
 모든 필드를 채운 뒤에만 `luna_worker` 커스텀 역할을 spawn한다. 의존성이 있는 작업은
 단계별로 직렬 실행한다. 수락된 패킷 범위 안에서만 워커를 조정하고, 범위를 벗어나면
 중단한다. 실패 근거를 반영해 패킷을 수정하며 같은 패킷을 그대로 재시도하지 않는다.
-쓰기 충돌은 파괴적 정리 없이 Sol에서 해결한다.
+쓰기 충돌은 파괴적 정리 없이 주 에이전트가 해결한다.
 
 ## 결과 수용
 
@@ -159,9 +167,9 @@ Summary:
 Files changed:
 Validation run and results:
 Unresolved risks:
-Decision requested from Sol:
+Decision requested from the primary agent:
 
-워커 보고는 검증 전까지 주장으로 취급한다. Sol은 실제 파일, 전체 diff, 허용 범위와
+워커 보고는 검증 전까지 주장으로 취급한다. 주 에이전트는 실제 파일, 전체 diff, 허용 범위와
 변경 범위를 확인하고 검증 명령을 직접 다시 실행한다. 검증 증거 없는 `complete`는
 미완료로 처리한다. 짧은 발췌가 꼭 필요한 증거인 경우를 제외하고 원시 워커 로그를
 메인 컨텍스트에 넣지 않는다.
@@ -169,7 +177,7 @@ Decision requested from Sol:
 검증은 다음 단계로 나눈다.
 
 - 워커 검증: 작업 패킷의 좁은 `Required validation`을 실행한다.
-- 수용 검증: Sol이 범위와 diff를 확인하고 같은 좁은 검증을 한 번 다시 실행한다.
+- 수용 검증: 주 에이전트가 범위와 diff를 확인하고 같은 좁은 검증을 한 번 다시 실행한다.
 - 단계 통합 검증: 수용된 작업을 모은 뒤 전체 test, typecheck, build를 단계당 한 번 실행한다.
 - 최종 검증: commit, PR, 배포처럼 별도 workflow가 요구하는 최신 전체 검증을 실행한다.
 
@@ -182,9 +190,9 @@ Decision requested from Sol:
 충분하면 새 Codex 작업을 제안한다. 사용자가 같은 작업 유지를 원하면 따르되, 원시 로그
 대신 결정 문서와 미해결 위험만 다음 단계의 컨텍스트로 유지한다.
 
-## Sol 오케스트레이션 요약
+## 오케스트레이션 요약
 
-Lunaria를 사용한 단계가 끝나면 Sol이 다음 집계를 짧게 보고한다.
+Lunaria를 사용한 단계가 끝나면 주 에이전트가 다음 집계를 짧게 보고한다.
 
 Delegations:
 Completed / cancelled:
