@@ -16,7 +16,6 @@ import manage_luna_worker as manager
 
 VALID_AGENT = '''name = "luna_worker"
 description = "Leaf worker"
-model = "gpt-5.6-luna"
 model_reasoning_effort = "max"
 developer_instructions = "Stay bounded."
 '''
@@ -37,9 +36,11 @@ class ValidationTests(unittest.TestCase):
         self.assertTrue(any("TOML" in error for error in errors))
 
     def test_required_and_pinned_values_are_checked(self) -> None:
-        errors = manager.validate_agent_text('name = "wrong"\ndescription = "x"\n')
+        errors = manager.validate_agent_text(
+            'name = "wrong"\ndescription = "x"\nmodel = "gpt-6-luna"\n'
+        )
         self.assertTrue(any("developer_instructions" in error for error in errors))
-        self.assertTrue(any("gpt-5.6-luna" in error for error in errors))
+        self.assertTrue(any("model must be omitted" in error for error in errors))
         self.assertTrue(any("max" in error for error in errors))
 
 
@@ -262,6 +263,11 @@ class CliTests(unittest.TestCase):
         try:
             with (
                 patch.object(manager, "run_environment_check", return_value=report),
+                patch.object(
+                    manager,
+                    "available_luna_models",
+                    return_value=["gpt-6-luna", "gpt-5.6-luna"],
+                ),
                 redirect_stdout(stdout),
                 redirect_stderr(stderr),
             ):
@@ -276,7 +282,14 @@ class CliTests(unittest.TestCase):
             template.write_text(VALID_AGENT, encoding="utf-8")
             target = Path(directory) / "missing.toml"
             report = manager.EnvironmentReport("0.144.1", True, ())
-            with patch.object(manager, "run_environment_check", return_value=report):
+            with (
+                patch.object(manager, "run_environment_check", return_value=report),
+                patch.object(
+                    manager,
+                    "available_luna_models",
+                    return_value=["gpt-6-luna", "gpt-5.6-luna"],
+                ),
+            ):
                 code = manager.main([
                     "check", "--template", str(template), "--target", str(target)
                 ])
