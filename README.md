@@ -30,8 +30,9 @@
 
 > *메인 에이전트는 더 많은 일을 직접 하는 대신, 더 중요한 판단을 계속 소유해야 합니다.*
 
-Lunaria는 `gpt-5.6-sol`을 메인 에이전트로 유지하고, 범위와 성공 조건이 명확한 작업만
-`gpt-5.6-luna`의 Max reasoning worker에 맡기는 Codex skill입니다.
+Lunaria는 `gpt-5.6-sol`을 메인 에이전트로 유지하고, 범위와 성공 조건이 명확한 작업은
+Codex가 현재 표시하는 Luna 모델 중 최신 Max reasoning worker에 맡기는 Codex skill입니다.
+모델 ID는 위임할 때마다 명시하며, 최신 모델을 사용할 수 없으면 다음 Luna 후보를 시도합니다.
 
 Sol은 요구사항, 아키텍처, 작업 분해, 결과 검증과 최종 통합을 소유합니다. Luna Max는
 코드 리뷰, 모듈 분석, 독립 구현, 테스트처럼 경계가 분명한 작업을 별도 컨텍스트에서
@@ -74,6 +75,11 @@ python3 -B ~/.agents/skills/lunaria/scripts/manage_luna_worker.py check
 
 설치 기본 대상은 `~/.codex/agents/luna-worker.toml`입니다. 설치 후 현재 작업이 custom
 agent 목록을 갱신하지 못했다면 새 Codex 작업을 시작합니다.
+
+`check`와 `verify`는 Codex 모델 카탈로그에서 `max`를 지원하는 Luna 목록을 최신순으로
+출력합니다. Worker 파일은 모델 ID를 고정하지 않아 새 Luna가 추가돼도 소스 수정이나 재설치가
+필요하지 않습니다. 위임 때 첫 후보를 지정하고, 계정에서 지원하지 않는다는 명시적인 오류가
+반환될 때만 목록의 다음 후보를 같은 역할로 시도합니다.
 
 ### 사용
 
@@ -270,7 +276,7 @@ Sol이 직접 진행할 일이 없을 때만 실행 중인 worker를 묶어서 �
 
 - 메인 모델: `gpt-5.6-sol`
 - worker 역할: `luna_worker`
-- worker 모델: `gpt-5.6-luna`
+- worker 모델: 매 spawn에서 지정하는 Codex 카탈로그의 최신 `max` 지원 Luna
 - reasoning: `model_reasoning_effort = "max"`
 
 모델이나 역할이 확인되지 않으면 값을 추정하지 않습니다. 다른 worker로 조용히
@@ -278,8 +284,9 @@ Sol이 직접 진행할 일이 없을 때만 실행 중인 worker를 묶어서 �
 
 ### 매 위임 전 사전 점검
 
-`check`는 현재 Codex CLI 버전, `multi_agent` 기능, worker 설치 여부와 관리 템플릿의
-일치 상태를 읽기 전용으로 검사합니다. exit code가 `0`일 때만 위임합니다.
+`check`는 현재 Codex CLI 버전, `multi_agent` 기능, 최신순 Luna 모델 목록, worker 설치
+여부와 모델 버전이 없는 관리 템플릿의 일치 상태를 읽기 전용으로 검사합니다. exit code가
+`0`일 때만 위임합니다.
 
 ### 작업 경계
 
@@ -345,7 +352,7 @@ Lunaria는 **토큰 절약을 보장하는 도구가 아닙니다.** 각 worker�
 |:---|:---|
 | [`SKILL.md`](./SKILL.md) | Sol이 따르는 오케스트레이션 규칙 |
 | [`agents/openai.yaml`](./agents/openai.yaml) | Codex UI metadata와 기본 prompt |
-| [`assets/luna-worker.toml`](./assets/luna-worker.toml) | 고정된 Luna Max leaf worker template |
+| [`assets/luna-worker.toml`](./assets/luna-worker.toml) | 모델 ID를 spawn 시점에 받는 Luna Max leaf worker template |
 | [`scripts/manage_luna_worker.py`](./scripts/manage_luna_worker.py) | worker 점검, diff, 설치와 검증 도구 |
 | [`tests/`](./tests) | 설정·설치 안전성과 skill 계약 회귀 테스트 |
 

@@ -80,14 +80,20 @@ Sol이 진행할 수 있는 요구사항 정리, 수용 검증이나 통합 작�
 - 메인 모델이 정확히 `gpt-5.6-sol`인지 확인한다. 메인 모델을 식별할 수 없거나
   다르면 엄격한 Lunaria 토폴로지가 비활성임을 보고한다.
 - 위임 전마다 이 스킬 디렉터리를 기준으로 관리자의 기본 템플릿과 기본 대상을 사용해
-  `python3 -B scripts/manage_luna_worker.py check`를 실행한다. 역할 표시만으로는 이
-  사전 점검을 충족하지 않는다. `check`가 exit 0을 반환할 때만 진행한다.
-- `luna_worker` 커스텀 역할을 확인한다. 다른 모델이나 역할로 자동 대체하지 않는다.
-- 성공한 `check` 뒤 첫 실제 `luna_worker` spawn을 discovery, 모델, Max entitlement
-  점검으로 취급한다. Luna 또는 Max를 사용할 수 없으면 보고하고, Sol 단독 진행은 그
+  `python3 -B scripts/manage_luna_worker.py check`를 실행한다. 관리자는 Codex에 표시된
+  `max` reasoning 지원 Luna 모델 목록을 최신순으로 출력한다. Worker 설정에는 모델을
+  고정하지 않으며, 각 spawn에 `model=<목록의 첫 후보>`와 `reasoning_effort="max"`를
+  명시한다. 역할 표시만으로는 이 사전 점검을 충족하지 않는다. `check`가 exit 0을
+  반환할 때만 진행한다.
+- `luna_worker` 커스텀 역할을 확인한다. 다른 역할로 자동 대체하지 않는다. 모델은 아래
+  제한된 최신순 Luna 후보 규칙으로만 바꿀 수 있다.
+- 최신 모델이 명시적으로 unavailable/unsupported 오류로 거절되면, 같은 `luna_worker`
+  역할로 목록의 다음 Luna 모델을 시도한다. 모델 사용 불가 오류가 아닌 실패는 재시도하지
+  않는다. Max를 지원하는 Luna를 하나도 실행할 수 없으면 보고하고, Sol 단독 진행은 그
   선택이 명시된 뒤에만 허용한다.
 - 공개된 native spawn 또는 details metadata에서 역할, 모델, reasoning effort를
-  확인할 수 있으면 `luna_worker`, `gpt-5.6-luna`, `max`와 대조한다. 관측하지 못한 값을 추정하지 않는다.
+  확인할 수 있으면 `luna_worker`, spawn에 지정한 Luna 모델, `max`와 대조한다. 관측하지
+  못한 값을 추정하지 않는다.
   내부 rollout 또는 세션 파일을 읽지 않는다.
 - `check`가 설치 누락이나 drift를 보고하면 `plan`을 실행한다. 명시적 승인 뒤에만
   `install`을 실행하고, `verify`와 `check`를 차례로 다시 실행한 뒤 위임한다.

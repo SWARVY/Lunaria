@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import json
 import os
 import re
 import stat
@@ -14,9 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REQUIRED_FIELDS = ("name", "description", "developer_instructions")
+LUNA_MODEL_PATTERN = re.compile(r"^gpt-(?P<version>\d+(?:\.\d+)*)-luna$")
 PINNED_VALUES = {
     "name": "luna_worker",
-    "model": "gpt-5.6-luna",
     "model_reasoning_effort": "max",
 }
 
@@ -106,8 +107,65 @@ def run_environment_check(codex_bin: str = "codex") -> EnvironmentReport:
     return EnvironmentReport(version, enabled, tuple(errors))
 
 
+def available_luna_models(codex_bin: str = "codex") -> list[str]:
+    """Return visible Luna models that support Max, newest version first."""
+    try:
+        result = subprocess.run(
+            [codex_bin, "debug", "models"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        raise AgentConfigError(
+            f"Cannot read the Codex model catalog with {codex_bin}: {error}"
+        ) from error
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise AgentConfigError(
+            "Cannot read the Codex model catalog"
+            + (f": {detail}" if detail else "")
+        )
+
+    try:
+        catalog = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise AgentConfigError(
+            f"Codex returned an invalid model catalog: {error}"
+        ) from error
+
+    candidates: list[tuple[tuple[int, ...], str]] = []
+    models = catalog.get("models") if isinstance(catalog, dict) else None
+    if not isinstance(models, list):
+        raise AgentConfigError("Codex model catalog does not contain a models list")
+
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        slug = model.get("slug")
+        match = LUNA_MODEL_PATTERN.fullmatch(slug) if isinstance(slug, str) else None
+        if match is None or model.get("visibility") == "hide":
+            continue
+        reasoning_levels = model.get("supported_reasoning_levels")
+        if not isinstance(reasoning_levels, list) or not any(
+            isinstance(level, dict) and level.get("effort") == "max"
+            for level in reasoning_levels
+        ):
+            continue
+        version = tuple(int(part) for part in match.group("version").split("."))
+        candidates.append((version, slug))
+
+    if not candidates:
+        raise AgentConfigError(
+            "Codex model catalog has no visible Luna model that supports max reasoning"
+        )
+    candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+    return [slug for _version, slug in candidates]
+
+
 def validate_agent_text(text: str) -> tuple[str, ...]:
-    """Return all TOML schema and pinned-value errors without writing files."""
+    """Return TOML schema and worker-role errors without writing files."""
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as error:
@@ -122,6 +180,12 @@ def validate_agent_text(text: str) -> tuple[str, ...]:
         actual = data.get(field)
         if actual != expected:
             errors.append(f"{field} must be {expected!r}; got {actual!r}")
+    model = data.get("model")
+    if model is not None:
+        errors.append(
+            "model must be omitted so each spawn can select the latest available Luna; "
+            f"got {model!r}"
+        )
     return tuple(errors)
 
 
@@ -357,6 +421,7 @@ def _default_target() -> Path:
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--template", type=Path, default=_default_template())
     parser.add_argument("--target", type=Path, default=_default_target())
+    parser.add_argument("--codex-bin", default="codex")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -365,7 +430,6 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("check", "verify"):
         command = commands.add_parser(name)
         _add_common_arguments(command)
-        command.add_argument("--codex-bin", default="codex")
     plan = commands.add_parser("plan")
     _add_common_arguments(plan)
     install = commands.add_parser("install")
@@ -433,10 +497,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_OK
 
+    try:
+        luna_models = available_luna_models(args.codex_bin)
+    except AgentConfigError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return EXIT_ENVIRONMENT
+
     report = run_environment_check(args.codex_bin)
     drift = _installed_errors(args.target, desired, snapshot)
     if report.version is not None:
         print(f"Codex CLI: {report.version}")
+    print(f"Available Luna worker models (max, newest first): {', '.join(luna_models)}")
     for error in report.errors + drift:
         print(f"error: {error}", file=sys.stderr)
     if report.errors:
