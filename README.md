@@ -67,10 +67,23 @@ python3 -B ~/.agents/skills/lunaria/scripts/manage_luna_worker.py check
 python3 -B ~/.agents/skills/lunaria/scripts/manage_luna_worker.py plan
 ```
 
-diff가 의도와 맞을 때만 worker를 설치합니다.
+대상이 없다면 worker를 설치합니다.
 
 ```bash
 python3 -B ~/.agents/skills/lunaria/scripts/manage_luna_worker.py install
+```
+
+기존 파일이 있으면 사용자 설정도 diff에 포함될 수 있으니 전체 변경을 확인하세요. 교체를
+승인한 경우에만 `--replace`를 붙입니다. 기존 내용은 UTC 타임스탬프가 붙은 `.bak-...`
+파일로 보관됩니다.
+
+```bash
+python3 -B ~/.agents/skills/lunaria/scripts/manage_luna_worker.py install --replace
+```
+
+설치 후 검증합니다.
+
+```bash
 python3 -B ~/.agents/skills/lunaria/scripts/manage_luna_worker.py verify
 python3 -B ~/.agents/skills/lunaria/scripts/manage_luna_worker.py check
 ```
