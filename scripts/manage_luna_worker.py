@@ -434,7 +434,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_arguments(plan)
     install = commands.add_parser("install")
     _add_common_arguments(install)
-    install.add_argument("--replace", action="store_true")
+    install.add_argument(
+        "--replace",
+        action="store_true",
+        help="replace an existing target after review and keep a timestamped backup",
+    )
     return parser
 
 
@@ -484,6 +488,11 @@ def main(argv: list[str] | None = None) -> int:
             backup = install_agent(desired, args.target, replace=args.replace)
         except ExistingAgentError as error:
             print(f"error: {error}", file=sys.stderr)
+            print(
+                "Review the current diff with `plan`; rerun `install --replace` "
+                "only after approving the replacement. A timestamped backup will be kept.",
+                file=sys.stderr,
+            )
             return EXIT_DRIFT
         except (OSError, AgentConfigError) as error:
             print(f"error: {error}", file=sys.stderr)

@@ -103,8 +103,11 @@ implementer가 작업하고, 주 에이전트가 결과를 수용한 뒤 단계 
   확인할 수 있으면 `luna_worker`, spawn에 지정한 Luna 모델, `max`와 대조한다. 관측하지
   못한 값을 추정하지 않는다.
   내부 rollout 또는 세션 파일을 읽지 않는다.
-- `check`가 설치 누락이나 drift를 보고하면 `plan`을 실행한다. 명시적 승인 뒤에만
-  `install`을 실행하고, `verify`와 `check`를 차례로 다시 실행한 뒤 위임한다.
+- `check`가 설치 누락이나 drift를 보고하면 `plan`을 실행하고 diff를 확인한다. 대상 파일이
+  없으면 승인 뒤 `install`을 실행한다. 기존 파일이 다르면 사용자 설정이 포함됐을 수 있으므로
+  diff를 보여주고 교체 승인을 요청한다. 승인 뒤에만 `install --replace`를 실행한다. 이 명령은
+  기존 파일을 UTC 타임스탬프 백업으로 보존한다. 이후 `verify`와 `check`를 차례로 통과한 뒤
+  위임한다.
 
 ## 위임과 실행
 
@@ -211,5 +214,6 @@ Token evidence:
 ## 설정 안전성
 
 `scripts/manage_luna_worker.py`는 이 SKILL.md를 기준으로 찾는다. `check`, `plan`,
-`verify`는 읽기 전용이다. `install`은 선택한 에이전트 대상만 쓰고 기본적으로 교체를
-거부하며 `~/.codex/config.toml`을 수정하지 않는다.
+`verify`는 읽기 전용이다. `install`은 선택한 에이전트 대상만 쓰고 기본적으로 기존 파일을
+교체하지 않는다. 승인된 갱신에는 `install --replace`를 사용하며, 교체 전 내용을 UTC
+타임스탬프 백업으로 보존한다. 어느 설치 명령도 `~/.codex/config.toml`을 수정하지 않는다.
